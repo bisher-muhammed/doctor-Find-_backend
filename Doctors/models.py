@@ -23,8 +23,15 @@ class DoctorProfile(models.Model):
     
 
 
+
     def __str__(self):
-        return f"{self.user.username}"
+        return f"{self.first_name} {self.last_name} ({self.specification})"
+
+
+    
+
+
+    
     
 
 
@@ -38,8 +45,7 @@ class Slots(models.Model):
     is_booked = models.BooleanField(default=False)
     amount = models.DecimalField(max_digits=10,decimal_places=2,default=Decimal('0.00'))
 
-    
-    
+
     end_date = models.DateField()
 
     def save(self, *args, **kwargs):
@@ -134,3 +140,51 @@ class WalletTransaction(models.Model):
 
     def __str__(self):
         return f" - Status: {self.status}"
+
+
+
+class Notification(models.Model):
+    doctor = models.ForeignKey('DoctorProfile', on_delete=models.CASCADE, related_name='notifications')
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Notification for {self.doctor.user.username} at {self.created_at}"
+
+    @classmethod
+    def create_notification(cls, doctor, user, slot, status):
+        """
+        Create and save a notification for a doctor when a booking is created.
+        """
+        # Build the notification message
+        message = (
+            f"You have a new booking!\n"
+            f"User: {user.username}\n"
+            f"Slot: {slot.start_time.strftime('%I:%M %p')} - {slot.end_time.strftime('%I:%M %p')}\n"
+            f"Date: {slot.start_date.strftime('%Y-%m-%d')}\n"
+            f"Status: {status}"
+        )
+
+        # Create the notification object
+        notification = cls(doctor=doctor, message=message)
+        notification.save()
+
+    @classmethod
+    def clear_notifications(cls, doctor):
+        """
+        Clear all notifications for the doctor.
+        """
+        cls.objects.filter(doctor=doctor).delete()
+
+    @classmethod
+    def mark_notification_as_read(cls, doctor, notification_id):
+        """
+        Mark a notification as read based on its ID.
+        """
+        try:
+            notification = cls.objects.get(id=notification_id, doctor=doctor)
+            notification.is_read = True
+            notification.save()
+        except cls.DoesNotExist:
+            print(f"Notification with ID {notification_id} does not exist for doctor {doctor.user.username}.")

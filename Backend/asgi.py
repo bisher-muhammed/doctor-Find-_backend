@@ -10,7 +10,6 @@ import os
 import django
 from django.core.asgi import get_asgi_application
 import socketio
-
 # Initialize AsyncServer with allowed CORS origins
 sio = socketio.AsyncServer(
     async_mode='asgi',
@@ -87,17 +86,40 @@ async def join_call_room(sid, data):
     await sio.enter_room(sid, room_id)
     print(f"SID {sid} joined room {room_id} for call {callId}")
 
-    
 
+
+#------------------------------------------------------------------------------------------------------------------------------------------------#
+# Notification events
+# ------------------------------ #
+# Notification Event Handlers
+# ------------------------------ #
+
+# Send Notification (for real-time notifications)
+@sio.event
+async def send_notification(sid, data):
+    doctor_id = data.get('doctor_id')
+    notification_type = data.get('notification_type')
+    message = data.get('message', '')
+
+    # Emit notification to the doctor (room based on doctor ID)
+    await sio.emit('receive_notification', {
+        'notification_type': notification_type,
+        'message': message,
+        'doctor_id': doctor_id,
+    }, room=f"doctor_{doctor_id}")
+
+
+# ------------------------------ #
 # Django and ASGI setup
+# ------------------------------ #
+
+# Set Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Backend.settings')
 django.setup()
 
 # ASGI application
 django_asgi_app = get_asgi_application()
-application = socketio.ASGIApp(sio, django_asgi_app)  # Combine Socket.IO and Django
-
-
+application = socketio.ASGIApp(sio, django_asgi_app) 
 
 
 

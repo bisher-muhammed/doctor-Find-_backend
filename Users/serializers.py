@@ -190,10 +190,22 @@ class BookingSerializer(serializers.ModelSerializer):
     user = UserSerializer()
     doctor = DoctorProfileSerializer()
     slots = SlotCreateSerializer()
+    transaction_type = serializers.SerializerMethodField()# Declare it here
 
     class Meta:
         model = Bookings
-        fields = ['id', 'user', 'doctor', 'slots', 'created_at', 'status']
+        fields = ['id', 'user', 'doctor', 'slots', 'created_at', 'status','transaction_type']
+
+    
+
+    def get_transaction_type(self, obj):
+    # Check if a Razorpay transaction exists
+        if obj.transaction_set.exists():  # Use transaction_set to access related transactions
+            return 'Razorpay'
+        elif obj.wallettransaction_set.exists():  # Use wallettransaction_set for wallet transactions
+            return 'Wallet'
+        return 'Unknown'  # Return 'Unknown' if no transaction exists
+
 
 
 

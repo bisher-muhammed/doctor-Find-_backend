@@ -11,6 +11,7 @@ from .serializers import *
 from rest_framework.generics import ListAPIView,CreateAPIView,RetrieveAPIView
 from Doctors.serializers import DoctorProfileSerializer,SlotCreateSerializer
 import razorpay
+from django.db.models import Q
 from django.conf import settings
 from Doctors.models import Transaction, WalletTransaction
 from django.shortcuts import redirect
@@ -276,24 +277,35 @@ class EditProfileView(APIView):
 
 class Doctors_list(ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
-    
     serializer_class = DoctorProfileSerializer
 
     def get_queryset(self):
-        # This method should return the queryset for the view
         queryset = DoctorProfile.objects.filter(is_verified=True)
+        
+        # Get the search term from the query parameters
+        search_term = self.request.query_params.get('search', None)
+        
+        # If a search term exists, filter the queryset
+        if search_term:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search_term) |  # Search by first name
+                Q(last_name__icontains=search_term)|   # Search by last name
+                Q(specification__icontains=search_term)  # Search by specialization (or any other relevant field)
+            )
         
         return queryset
 
     def get(self, request, *args, **kwargs):
-        # This method handles GET requests
         queryset = self.get_queryset()
-        
-        
         serializer = self.get_serializer(queryset, many=True)
-        
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+from datetime import datetime
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
 
 class SlotListView(ListAPIView):
     permission_classes = [IsAuthenticated]
@@ -301,20 +313,42 @@ class SlotListView(ListAPIView):
 
     def get_queryset(self):
         doctor_id = self.kwargs.get('doctor_id')
+        date_filter = self.request.query_params.get('date', None)
+        time_filter = self.request.query_params.get('time', None)
+
         print(f"Requested doctor ID: {doctor_id}")
+        print(f"Date filter: {date_filter}")
+        print(f"Time filter: {time_filter}")
 
         try:
             doctor = DoctorProfile.objects.get(id=doctor_id)
             if doctor.is_verified:
-                slots = Slots.objects.filter(doctor=doctor,is_booked= False)
-                
-                
+                # Start with all available slots for the doctor
+                slots = Slots.objects.filter(doctor=doctor, is_booked=False)
+
+                # Apply date filtering if provided
+                if date_filter:
+                    try:
+                        date_obj = datetime.strptime(date_filter, '%Y-%m-%d').date()
+                        slots = slots.filter(date=date_obj)
+                    except ValueError:
+                        return Slots.objects.none()  # Invalid date format
+
+                # Apply time filtering if provided
+                if time_filter:
+                    # Assuming `time_filter` is in 'HH:MM AM/PM' format
+                    try:
+                        time_obj = datetime.strptime(time_filter, '%I:%M %p').time()
+                        slots = slots.filter(start_time__time=time_obj)  # Adjust field as necessary
+                    except ValueError:
+                        return Slots.objects.none()  # Invalid time format
+
                 return slots
             else:
                 return Slots.objects.none()
         except DoctorProfile.DoesNotExist:
             return Slots.objects.none()
-        
+
     def get(self, request, *args, **kwargs):
         doctor_id = self.kwargs.get('doctor_id')
 
@@ -336,7 +370,6 @@ class SlotListView(ListAPIView):
 
         # Serialize the slots
         slot_serializer = self.get_serializer(slots, many=True)
-        
 
         # Combine the data
         response_data = {
@@ -345,6 +378,7 @@ class SlotListView(ListAPIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
 
 
         

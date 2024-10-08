@@ -14,6 +14,9 @@ urlpatterns = [
     path('admin/doctors/<int:pk>/toggle/', DoctorStatus.as_view(), name='doctor_status'),
     path('admin/users/<int:pk>/toggle/',UserStatus.as_view(), name='user_status'),
     path('admin/users_list/', UsersList.as_view(),name = 'users_list'),
+    path('admin/revenue/',Total_Revenue.as_view(),name='revienue_list'),
+    path('admin/total-revenue-and-counts/', TotalRevenueAndCounts.as_view(), name='total-revenue-and-counts'),
+    path('admin/sales_report/',SalesReportView.as_view(),name='sales_report')
 
 
     

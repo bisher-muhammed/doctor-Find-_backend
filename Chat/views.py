@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from .models import ChatRoom, ChatMessage
 from .serializers import*
 import logging
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -16,12 +17,24 @@ class ChatRoomListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.user_type == 'patient':
-            return ChatRoom.objects.filter(patient=user)
-        elif user.user_type == 'doctor':
-            return ChatRoom.objects.filter(doctor__user=user)
-        return ChatRoom.objects.none()
+        queryset = ChatRoom.objects.none()  # Default empty queryset
 
+        # Filter chat rooms based on user type
+        if user.user_type == 'patient':
+            queryset = ChatRoom.objects.filter(patient=user)
+        elif user.user_type == 'doctor':
+            queryset = ChatRoom.objects.filter(doctor__user=user)
+
+        # Get the search term from the query parameters
+        search_term = self.request.query_params.get('search', None)
+        
+        # If a search term exists, filter chat rooms by doctor's first name
+        if search_term:
+            queryset = queryset.filter(
+                Q(doctor__first_name__icontains=search_term)
+            )
+
+        return queryset
 
 
     def perform_create(self, serializer):
