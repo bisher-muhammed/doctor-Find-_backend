@@ -13,7 +13,7 @@ from Doctors.serializers import DoctorProfileSerializer,SlotCreateSerializer
 import razorpay
 from django.db.models import Q
 from django.conf import settings
-from Doctors.models import Transaction, WalletTransaction
+from Doctors.models import Notification, Transaction, WalletTransaction
 from django.shortcuts import redirect
 from django.http import HttpResponseBadRequest, JsonResponse
 from rest_framework.decorators import api_view
@@ -383,46 +383,37 @@ class SlotListView(ListAPIView):
 
         
     
+
+
 class BookSlotView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, doctor_id, slot_id):
         try:
-            # Print the entire request data to debug the payment method issue
-            
-
             # Retrieve the doctor and slot based on the provided IDs
-           
-            doctor = DoctorProfile.objects.get(id=doctor_id)
-
-            
-            slot = Slots.objects.get(id=slot_id, doctor=doctor, is_booked=False, is_blocked=False)
+            doctor = get_object_or_404(DoctorProfile, id=doctor_id)
+            slot = get_object_or_404(Slots, id=slot_id, doctor=doctor, is_booked=False, is_blocked=False)
 
             # Get the payment method from the request
             payment_method = request.data.get('payment_method', 'razorpay')  # Default to Razorpay if not provided
             
-
             # Create a new booking instance
             booking = Bookings.objects.create(user=request.user, doctor=doctor, slots=slot)
             print(f"Created booking: {booking.id} for user: {request.user.username}")
 
+            # Construct the notification message with the booking details
+            # Construct the notification message with the booking details
+
             if payment_method == 'wallet':
-               
-                
                 # Retrieve or create the user's wallet
                 wallet, created = Wallet.objects.get_or_create(user=request.user)
 
-                
-                    
-
                 # Check if the wallet balance is sufficient
-                
                 if wallet.balance < slot.amount:
                     print("Insufficient wallet balance.")
                     return Response({"error": "Insufficient wallet balance."}, status=status.HTTP_400_BAD_REQUEST)
 
                 # Deduct the slot amount from the wallet
-                
                 wallet.balance -= slot.amount
                 wallet.save()
 
@@ -436,15 +427,12 @@ class BookSlotView(APIView):
                     status='completed',  # Assuming the payment is successful
                 )
 
-                
-
                 # Update the booking status to completed
                 booking.status = 'pending'
                 booking.save()
                 booking.slots.is_booked = True
                 booking.slots.save()
                 
-
                 # Prepare response data
                 response_data = {
                     'message': "Booking confirmed and payment completed.",
@@ -506,10 +494,6 @@ class BookSlotView(APIView):
         except Exception as e:
             print(f"An error occurred: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-
 
 
 

@@ -30,9 +30,13 @@ urlpatterns = [
     path('doctor/chat-rooms/', ChatRoomListView.as_view(), name='chat-room-list'),
     path('doctor/chat_rooms/<int:room_id>/messages/', ChatMessageListCreateView.as_view(), name='chatroom-detail'),
     path('doctor/chat_rooms/<int:room_id>/send_message/', DoctorSendMessageView.as_view(), name='doctor-send-message'),
-
+    path('doctor/notification/',DotorNotification.as_view(),name='doctor-notifications'),
+    path('doctor/notification/<int:notification_id>/', DotorNotification.as_view(), name='doctor-notification-detail'),  
+    path('doctor/notification/unread-count/', UnreadNotificationCount.as_view(), name='unread_notification_count'),
 
 ]
+
+
 
 
     

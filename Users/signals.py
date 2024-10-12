@@ -4,6 +4,8 @@ from .models import Wallet, MyUser
 from django.contrib.auth import get_user_model
 from Doctors.models import Bookings,Notification
 from django.utils import timezone
+from asgiref.sync import async_to_sync
+from Backend.sockets import sio 
 
 User = get_user_model()  # Corrected to call the function
 
@@ -31,38 +33,43 @@ def update_wallet_on_cancel(sender, instance, created, **kwargs):
 
 
 
-
 @receiver(post_save, sender=Bookings)
-def send_notification_to_doctor(sender, instance, created, **kwargs):
+def notify_doctor_slot_booking(sender, instance, created, **kwargs):
     if created:
-        # Avoid circular import issue by importing sio inside the function
-        from Backend.asgi import sio
-
-        # Get the related doctor, user, and slot
-        doctor = instance.doctor
-        user = instance.user
         slot = instance.slots
-
-        # Create a notification
-        Notification.create_notification(
-            doctor=doctor,
-            user=user,
-            slot=slot,
-            status=instance.status
-        )
-
-        # Prepare the notification message
+        doctor = instance.doctor
         notification_message = (
-            f"You have a new booking!\n"
-            f"User: {user.username}\n"
-            f"Slot: {slot.start_time.strftime('%I:%M %p')} - {slot.end_time.strftime('%I:%M %p')}\n"
-            f"Date: {slot.start_date.strftime('%Y-%m-%d')}\n"
-            f"Status: {instance.status}"
+            f"{instance.user.username} has booked a slot. "
+            f"Slot: {slot.start_time} - {slot.end_time}, "
+            f"Date: {slot.start_date}"
         )
 
-        # Emit real-time notification using the doctor’s ID as the room ID
-        sio.start_background_task(sio.emit, 'send_notification', {
-            'doctor_id': doctor.id,
-            'notification_type': 'booking',
-            'message': notification_message,
-        }, room=f"doctor_{doctor.id}")
+        # Convert datetime objects to strings (ISO 8601 format)
+        slot_start = slot.start_time.isoformat() if slot.start_time else None
+        slot_end = slot.end_time.isoformat() if slot.end_time else None
+        timestamp = timezone.now().isoformat()  # Current timestamp in ISO format
+
+        print(f"Notification Message: {notification_message}")
+        print(f"Slot Start (ISO format): {slot_start}")
+        print(f"Slot End (ISO format): {slot_end}")
+        print(f"Timestamp: {timestamp}")
+
+        Notification.create_notification(recipient=doctor.user, message=notification_message)
+        print('notification created')
+
+        # Emit the notification via Socket.IO to the relevant room
+        room_id = f'doctor_{doctor.user.id}'
+        print(f"Emitting to room ID: {room_id}")
+
+        async_to_sync(sio.emit)(
+            'receive_notification',
+            {
+                'message': notification_message,
+                'slot_start': slot_start,
+                'slot_end': slot_end,
+                'timestamp': timestamp  # Already in string format
+            },
+            room=room_id
+        )
+        print("Notification emitted successfully!")
+

@@ -144,38 +144,36 @@ class WalletTransaction(models.Model):
 
 
 class Notification(models.Model):
-    doctor = models.ForeignKey('DoctorProfile', on_delete=models.CASCADE, related_name='notifications')
+    recipient = models.ForeignKey(MyUser, on_delete=models.CASCADE)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"Notification for {self.doctor.user.username} at {self.created_at}"
+        return f"Notification for {self.recipient.username} at {self.created_at}"
+    
+
+    
 
     @classmethod
-    def create_notification(cls, doctor, user, slot, status):
-        """
-        Create and save a notification for a doctor when a booking is created.
-        """
-        # Build the notification message
-        message = (
-            f"You have a new booking!\n"
-            f"User: {user.username}\n"
-            f"Slot: {slot.start_time.strftime('%I:%M %p')} - {slot.end_time.strftime('%I:%M %p')}\n"
-            f"Date: {slot.start_date.strftime('%Y-%m-%d')}\n"
-            f"Status: {status}"
-        )
+    def create_notification(cls, recipient, message):
+        # Create a new notification instance
+        notification = cls(recipient=recipient, message=message)
+        notification.save()  # Save to the database
+        return notification
 
-        # Create the notification object
-        notification = cls(doctor=doctor, message=message)
-        notification.save()
 
+
+
+
+
+    
     @classmethod
     def clear_notifications(cls, doctor):
         """
         Clear all notifications for the doctor.
         """
-        cls.objects.filter(doctor=doctor).delete()
+        cls.objects.filter(recipient=doctor).delete()  # Use recipient instead of doctor
 
     @classmethod
     def mark_notification_as_read(cls, doctor, notification_id):
@@ -183,8 +181,10 @@ class Notification(models.Model):
         Mark a notification as read based on its ID.
         """
         try:
-            notification = cls.objects.get(id=notification_id, doctor=doctor)
+            notification = cls.objects.get(id=notification_id, recipient=doctor)  # Use recipient instead of doctor
             notification.is_read = True
             notification.save()
         except cls.DoesNotExist:
-            print(f"Notification with ID {notification_id} does not exist for doctor {doctor.user.username}.")
+            print(f"Notification with ID {notification_id} does not exist for doctor {doctor.username}.")
+
+

@@ -630,6 +630,7 @@ class BookingDetail(RetrieveAPIView):
 #---------------------------------------------------------------------------------------------------------------------------#
 from Chat.models import *  
 from rest_framework.exceptions import NotFound
+from django.db.models import Q
 
 
 class ChatRoomListView(generics.ListAPIView):
@@ -638,9 +639,24 @@ class ChatRoomListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        queryset = ChatRoom.objects.none()  # Start with an empty queryset
+
+        # Check if the user is a doctor
         if hasattr(user, 'doctorprofile'):
-            return ChatRoom.objects.filter(doctor=user.doctorprofile)
-        return ChatRoom.objects.none()  # Return empty queryset if user is not a doctor
+            queryset = ChatRoom.objects.filter(doctor=user.doctorprofile)
+
+            # Retrieve the search term from the query parameters
+            search_term = self.request.query_params.get('search', None)
+            
+            # If a search term exists, filter chat rooms by doctor's first name
+            if search_term:
+                queryset = queryset.filter(
+                    Q(doctor__first_name__icontains=search_term)
+                )
+
+        return queryset
+    
+    
 from django.shortcuts import get_object_or_404
 
 
@@ -707,3 +723,45 @@ class DoctorSendMessageView(generics.CreateAPIView):
 
         # Save the message with the doctor as the sender
         serializer.save(sender=user, room=room)
+
+
+
+class DotorNotification(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotificationSerializer
+
+    def get_queryset(self):
+        # Return notifications for the logged-in doctor
+        return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
+    
+
+
+    
+
+    
+    
+
+    
+
+    def patch(self, request, notification_id):
+        try:
+            notification = Notification.objects.get(id=notification_id, recipient=request.user)
+            notification.is_read = True
+            notification.save()
+            return Response({'status': 'Notification marked as read'}, status=status.HTTP_200_OK)
+        except Notification.DoesNotExist:
+            return Response({'error': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request):
+        Notification.clear_notifications(request.user)
+        return Response({'status': 'All notifications cleared'}, status=status.HTTP_204_NO_CONTENT)
+    
+
+        
+
+class UnreadNotificationCount(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
+        return Response({'unread_count': unread_count})

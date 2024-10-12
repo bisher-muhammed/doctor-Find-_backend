@@ -7,7 +7,7 @@ from rest_framework import serializers,viewsets
 from Users.models import MyUser  # Assuming this is the custom user model
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import DoctorProfile, Slots,Document
+from .models import DoctorProfile, Notification, Slots,Document
 
 class DoctorRegisterSerializer(serializers.ModelSerializer):
     user_type = serializers.ChoiceField(choices=MyUser.USER_TYPE_CHOICES, default='doctor')
@@ -352,3 +352,12 @@ class SlotDeleteSerializer(serializers.ModelSerializer):
             csrf_middleware.process_view(request, None, (), {})
         except ValidationError as e:
             raise serializers.ValidationError('CSRF token missing or incorrect.') 
+        
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+
+
