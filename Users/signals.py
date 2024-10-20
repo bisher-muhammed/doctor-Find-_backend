@@ -73,3 +73,17 @@ def notify_doctor_slot_booking(sender, instance, created, **kwargs):
         )
         print("Notification emitted successfully!")
 
+
+        unread_count = Notification.objects.filter(recipient=doctor.user, is_read=False).count()
+        print(unread_count)
+        async_to_sync(sio.emit)(
+            'unread_count_update',
+            {
+                'unread_count': unread_count
+            },
+            room=room_id  # Send the count to the relevant user
+        )
+
+
+
+

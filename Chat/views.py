@@ -8,12 +8,13 @@ import logging
 from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from Users.permissions import IsPatient
 
 logger = logging.getLogger(__name__)
 
 class ChatRoomListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatRoomSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def get_queryset(self):
         user = self.request.user
@@ -42,7 +43,7 @@ class ChatRoomListCreateView(generics.ListCreateAPIView):
 
 class StartChatView(generics.GenericAPIView):
     serializer_class = ChatRoomSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def post(self, request, doctor_id=None):
         user = request.user
@@ -73,7 +74,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
     parser_classes = [MultiPartParser, FormParser]  # To handle file uploads
 
     def get_queryset(self):
@@ -104,6 +105,7 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
 
 class ChatRoomDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsPatient]
     def get(self, request, room_id, format=None):
         try:
             chat_room = ChatRoom.objects.get(id=room_id)

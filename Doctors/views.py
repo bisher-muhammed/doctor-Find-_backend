@@ -20,9 +20,10 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from django.contrib.auth.decorators import login_required
 from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import get_user_model,authenticate
 from Chat.serializers import ChatMessageSerializer,ChatRoomSerializer
+from Users.permissions import IsDoctor
 
 User = get_user_model()
 
@@ -253,7 +254,7 @@ class GenerateSlots(CreateAPIView):
     queryset = Slots.objects.all()
     serializer_class = SlotCreateSerializer
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
 
     def post(self, request, *args, **kwargs):
         # Initialize the serializer with the provided data
@@ -286,7 +287,7 @@ logger = logging.getLogger(__name__)
 
 
 class SlotListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
     serializer_class = SlotCreateSerializer
     def get_queryset(self):
         user = self.request.user
@@ -338,8 +339,8 @@ from Users.serializers import BookingSerializer
 
 
 class DeleteSlotView(generics.GenericAPIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
+    
+    permission_classes = [IsDoctor]
     serializer_class = SlotDeleteSerializer
 
     def delete(self, request, *args, **kwargs):
@@ -367,8 +368,8 @@ class DeleteSlotView(generics.GenericAPIView):
 logger = logging.getLogger(__name__)
 
 class EditSlot(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    
+    permission_classes = [IsDoctor]
 
     def get_slot(self, slot_id, user):
         try:
@@ -453,8 +454,8 @@ class EditSlot(APIView):
 
 
 class EditDoctorProfileView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsDoctor]
+    
 
     def get(self, request):
         try:
@@ -486,7 +487,7 @@ class EditDoctorProfileView(APIView):
 
 
 class DoctorProfileView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsDoctor]
     authentication_classes = [JWTAuthentication]
 
     def get(self, request):
@@ -507,7 +508,7 @@ class DoctorProfileView(APIView):
 logger = logging.getLogger(__name__)
 
 class DocumentUpload(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsDoctor]
     parser_classes = [MultiPartParser]  # Handle multipart form data
 
     def post(self, request, doctor_id: int) -> Response:
@@ -555,7 +556,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 class BookingList(ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
     serializer_class = BookingSerializer
 
     def get_queryset(self):
@@ -579,6 +580,7 @@ class BookingList(ListAPIView):
 
 
 @api_view(['PATCH'])
+@permission_classes([IsDoctor])
 def update_booking_status(request, pk):
     try:
         booking = Bookings.objects.get(pk=pk)
@@ -635,7 +637,7 @@ from django.db.models import Q
 
 class ChatRoomListView(generics.ListAPIView):
     serializer_class = ChatRoomSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
 
     def get_queryset(self):
         user = self.request.user
@@ -662,7 +664,7 @@ from django.shortcuts import get_object_or_404
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
 
     def get_queryset(self):
         room_id = self.kwargs['room_id']
@@ -695,7 +697,7 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 from django.core.exceptions import PermissionDenied
 class DoctorSendMessageView(generics.CreateAPIView):
     serializer_class = ChatMessageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
     parser_classes = [MultiPartParser, FormParser]  # To handle file uploads
 
     def perform_create(self, serializer):
@@ -727,7 +729,7 @@ class DoctorSendMessageView(generics.CreateAPIView):
 
 
 class DotorNotification(ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
@@ -760,7 +762,7 @@ class DotorNotification(ListAPIView):
         
 
 class UnreadNotificationCount(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsDoctor]
 
     def get(self, request):
         unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()

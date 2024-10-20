@@ -94,24 +94,30 @@ class Bookings(models.Model):
 
 
 class Transaction(models.Model):
-    user = models.ForeignKey(MyUser, on_delete=models.CASCADE,related_name='transaction')
-    booking = models.ForeignKey(Bookings, on_delete=models.CASCADE, null=True, blank=True)
-    payment_id=models.CharField(max_length=100,null=True,blank=True)
+    user = models.ForeignKey(MyUser, on_delete=models.CASCADE, related_name='transaction')
+    booking = models.ForeignKey(Bookings, on_delete=models.SET_NULL, null=True, blank=True) 
+    payment_id = models.CharField(max_length=100, null=True, blank=True)
     razorpay_order_id = models.CharField(max_length=100, null=True, blank=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
-    
-    currency = models.CharField(max_length=10, default='INR')  # Default to INR for Indian Rupees
+    currency = models.CharField(max_length=10, default='INR')
     status = models.CharField(max_length=20, choices=[
         ('pending', 'Pending'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
     ], default='pending')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))  # Add amount field
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        # Copy the slot amount when the transaction is created
+        if self.booking and self.booking.slots:
+            self.amount = self.booking.slots.amount  # Store slot's amount at the time of booking
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Transaction {self.payment_id} - {self.currency}"
-    
+        return f"Transaction {self.payment_id} - {self.currency} - Amount: {self.amount}"
+
 
 
 
@@ -126,21 +132,23 @@ class WalletTransaction(models.Model):
         ('failed', 'Failed'),
     ]
 
-    wallet = models.ForeignKey('Users.Wallet', on_delete=models.CASCADE, related_name='transactions')  # Correct reference to Wallet in Users app
-    currency = models.CharField(max_length=10, default='INR')  # Default to INR
+    wallet = models.ForeignKey('Users.Wallet', on_delete=models.CASCADE, related_name='transactions')
+    currency = models.CharField(max_length=10, default='INR')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-
-    # ForeignKey to User and Booking
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wallet_transactions')
-    booking = models.ForeignKey(Bookings, on_delete=models.CASCADE, null=True, blank=True)
-
+    booking = models.ForeignKey(Bookings, on_delete=models.SET_NULL, null=True, blank=True)  # Changed to SET_NULL
     payment_id = models.CharField(max_length=100, null=True, blank=True)
-
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))  # Add amount field
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f" - Status: {self.status}"
+    def save(self, *args, **kwargs):
+        # Copy the slot amount when the wallet transaction is created
+        if self.booking and self.booking.slots:
+            self.amount = self.booking.slots.amount  # Store slot's amount at the time of booking
+        super().save(*args, **kwargs)
 
+    def __str__(self):
+        return f"Wallet Transaction {self.payment_id} - Status: {self.status} - Amount: {self.amount}"
 
 
 class Notification(models.Model):

@@ -108,3 +108,4 @@ def send_verification(email, doctor_name, start_time, end_time, duration, date, 
         print(f"Approval sent successfully to {email}")
     except Exception as e:
         print(f"Error sending approval to {email}: {e}")
+

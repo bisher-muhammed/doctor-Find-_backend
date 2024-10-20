@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate
 from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from Users.models import MyUser, UserProfile
-from Users.serializers import UserProfileDetailSerializer, UserProfileSerializer
+from Users.serializers import TransactionSerializer, UserProfileDetailSerializer, UserProfileSerializer, WalletTransactionSerializer
 from Users.utils import generate_pdf,send_notification_user
 from Doctors.models import DoctorProfile, Transaction, WalletTransaction
 from Doctors.serializers import DocumentSerializer,DoctorProfileSerializer
@@ -17,7 +17,7 @@ from django.db.models import Q, Sum
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from datetime import datetime
-
+from Users.permissions import IsAdmin
 import io
 
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -79,7 +79,7 @@ logger = logging.getLogger(__name__)
 
 
 class FetchDocuments(generics.ListAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdmin]
     serializer_class = DocumentSerializer
 
     def get_queryset(self):
@@ -114,6 +114,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class VerifyDocuments(generics.UpdateAPIView):
+    permission_classes = [IsAdmin]
     """
     View to verify doctor profiles.
     """
@@ -161,6 +162,7 @@ class VerifyDocuments(generics.UpdateAPIView):
 
 
 class DoctorsList(ListAPIView):
+    permission_classes = [IsAdmin]
     serializer_class = DoctorProfileSerializer
 
     def get_queryset(self):
@@ -172,6 +174,7 @@ class DoctorsList(ListAPIView):
 
 
 class DoctorStatus(generics.UpdateAPIView):
+    permission_classes = [IsAdmin]
     def post(self, request, pk):
         try:
             # Retrieve the doctor profile by primary key
@@ -190,6 +193,7 @@ class DoctorStatus(generics.UpdateAPIView):
 
 
 class UsersList(ListAPIView):
+    permission_classes = [IsAdmin]
     serializer_class = UserProfileDetailSerializer
 
     def get_queryset(self):
@@ -201,6 +205,7 @@ class UsersList(ListAPIView):
 
 
 class UserStatus(generics.UpdateAPIView):
+    permission_classes = [IsAdmin]
     def post(self, request, pk):
         try:
             # Retrieve the doctor profile by primary key
@@ -224,7 +229,7 @@ from django.db.models.functions import TruncMonth, TruncYear
 
 
 class Total_Revenue(generics.RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdmin]
 
     def get(self, request, *args, **kwargs):
         # Get the current date and time
@@ -235,13 +240,13 @@ class Total_Revenue(generics.RetrieveAPIView):
         transactions_yearly = Transaction.objects.filter(status='completed').annotate(
             year=TruncYear('created_at')
         ).values('year').annotate(
-            total_revenue=Sum('booking__slots__amount')
+            total_revenue=Sum('amount')  # Use 'amount' field from Transaction
         ).order_by('year')
 
         wallet_yearly = WalletTransaction.objects.filter(status='completed').annotate(
             year=TruncYear('created_at')
         ).values('year').annotate(
-            total_revenue=Sum('booking__slots__amount')
+            total_revenue=Sum('amount')  # Use 'amount' field from WalletTransaction
         ).order_by('year')
 
         # Combine yearly transaction and wallet transaction totals
@@ -253,17 +258,17 @@ class Total_Revenue(generics.RetrieveAPIView):
             year = item['year'].year
             yearly_revenue[year] = yearly_revenue.get(year, 0) + item['total_revenue']
 
-        # MONTHLY REVENUE (Last 12 months in the current year)
+        # MONTHLY REVENUE (Current year)
         transactions_monthly = Transaction.objects.filter(
             status='completed', created_at__year=current_year
         ).annotate(month=TruncMonth('created_at')).values('month').annotate(
-            total_revenue=Sum('booking__slots__amount')
+            total_revenue=Sum('amount')  # Use 'amount' field
         ).order_by('month')
 
         wallet_monthly = WalletTransaction.objects.filter(
             status='completed', created_at__year=current_year
         ).annotate(month=TruncMonth('created_at')).values('month').annotate(
-            total_revenue=Sum('booking__slots__amount')
+            total_revenue=Sum('amount')  # Use 'amount' field
         ).order_by('month')
 
         # Combine monthly transaction and wallet transaction totals
@@ -278,14 +283,14 @@ class Total_Revenue(generics.RetrieveAPIView):
         # Revenue by specialty
         revenue_by_specialty = (
             Transaction.objects.filter(status='completed')
-            .values('booking__slots__doctor__specification')
-            .annotate(total_revenue=Sum('booking__slots__amount'))
+            .values('booking__doctor__specification')
+            .annotate(total_revenue=Sum('amount'))  # Use 'amount' field
         )
 
-        wallet_revenue_by_speciality = (
+        wallet_revenue_by_specialty = (
             WalletTransaction.objects.filter(status='completed')
-            .values('booking__slots__doctor__specification')
-            .annotate(total_revenue=Sum('booking__slots__amount'))
+            .values('booking__doctor__specification')
+            .annotate(total_revenue=Sum('amount'))  # Use 'amount' field
         )
 
         # Combine both revenue_by_specialty results into a single dictionary
@@ -293,13 +298,13 @@ class Total_Revenue(generics.RetrieveAPIView):
 
         # Add revenue from Transaction
         for item in revenue_by_specialty:
-            spec = item['booking__slots__doctor__specification']
+            spec = item['booking__doctor__specification']
             total_revenue = item['total_revenue']
             combined_revenue_by_specialties[spec] = combined_revenue_by_specialties.get(spec, 0) + total_revenue
 
         # Add revenue from WalletTransaction
-        for item in wallet_revenue_by_speciality:
-            spec = item['booking__slots__doctor__specification']
+        for item in wallet_revenue_by_specialty:
+            spec = item['booking__doctor__specification']
             total_revenue = item['total_revenue']
             combined_revenue_by_specialties[spec] = combined_revenue_by_specialties.get(spec, 0) + total_revenue
 
@@ -307,23 +312,21 @@ class Total_Revenue(generics.RetrieveAPIView):
         return Response({
             "yearly_revenue": yearly_revenue,
             "monthly_revenue": monthly_revenue,
-            "revenue_by_specialties": combined_revenue_by_specialties  # Fixed spelling
+            "revenue_by_specialties": combined_revenue_by_specialties
         })
 
 
-
-
 class TotalRevenueAndCounts(generics.RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdmin]
 
     def get(self, request, *args, **kwargs):
         # Get the total revenue from completed transactions
         total_transaction_revenue = Transaction.objects.filter(status='completed').aggregate(
-            total_revenue=Sum('booking__slots__amount')
+            total_revenue=Sum('amount')  # Use 'amount' field
         )['total_revenue'] or 0
 
         total_wallet_revenue = WalletTransaction.objects.filter(status='completed').aggregate(
-            total_revenue=Sum('booking__slots__amount')
+            total_revenue=Sum('amount')  # Use 'amount' field
         )['total_revenue'] or 0
 
         # Combine total revenues
@@ -341,50 +344,54 @@ class TotalRevenueAndCounts(generics.RetrieveAPIView):
             "doctor_count": doctor_count,
             "patient_count": patient_count
         })
+
+
+class SalesReportView(APIView):
+    permission_classes = [IsAdmin]
     
-
-
-
-class SalesReportView(ListAPIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = BookingSerializer
-
-    def get_queryset(self):
-        # Filter based on user if required
-        user = self.request.user
-
+    def get(self, request, *args, **kwargs):
         # Fetch the date from query parameters (if provided)
-        end_date = self.request.query_params.get('date', None)
+        end_date = request.query_params.get('date', None)
+        print(f"Requested date: {end_date}")
 
-        # Get all completed bookings with either completed transactions or wallet transactions
-        bookings = Bookings.objects.filter(
-            Q(transaction__status='completed') | Q(wallettransaction__status='completed')  # Check for completed transactions
-        )
+        # Base query: Get all completed transactions and wallet transactions
+        transactions = Transaction.objects.filter(status='completed')
+        print(f"Initial transactions: {transactions}")
+        
+        wallet_transactions = WalletTransaction.objects.filter(status='completed')
+        print(f"Initial wallet transactions: {wallet_transactions}")
 
-        # If an end date is provided, filter the bookings till that date
+        # If an end date is provided, filter the transactions and wallet transactions till that date
         if end_date:
             try:
                 end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
-                bookings = bookings.filter(slots__start_date__lte=end_date_obj)
+                transactions = transactions.filter(created_at__date=end_date_obj)
+                print(f"Filtered transactions: {transactions}")
+                
+                wallet_transactions = wallet_transactions.filter(created_at__date=end_date_obj)
+                print(f"Filtered wallet transactions: {wallet_transactions}")
             except ValueError:
-                # Return an empty queryset if the date format is invalid
-                return Bookings.objects.none()
+                return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
 
-        return bookings
+        # Calculate the total amount from transactions and wallet transactions
+        total_transaction_amount = transactions.aggregate(total_amount=Sum('amount'))['total_amount'] or 0
+        total_wallet_transaction_amount = wallet_transactions.aggregate(total_amount=Sum('amount'))['total_amount'] or 0
 
-    def get(self, request, *args, **kwargs):
-        # Get the filtered queryset
-        bookings = self.get_queryset()
+        print(f"Total transaction amount: {total_transaction_amount}")
+        print(f"Total wallet transaction amount: {total_wallet_transaction_amount}")
 
-        # Serialize the bookings data
-        booking_serializer = self.get_serializer(bookings, many=True)
+        # Calculate the combined total amount
+        total_amount = total_transaction_amount + total_wallet_transaction_amount
+        print(f"Combined total amount: {total_amount}")
 
-        # Calculate the total amount for the slots in the bookings
-        total_amount = bookings.aggregate(total_amount=Sum('slots__amount'))['total_amount'] or 0
+        # Serialize the transactions and wallet transactions
+        transaction_serializer = TransactionSerializer(transactions, many=True)
+        wallet_transaction_serializer = WalletTransactionSerializer(wallet_transactions, many=True)
 
         # Prepare the response data
         response_data = {
-            'bookings': booking_serializer.data,
+            'transactions': transaction_serializer.data,
+            'wallet_transactions': wallet_transaction_serializer.data,
             'total_amount': total_amount
         }
 

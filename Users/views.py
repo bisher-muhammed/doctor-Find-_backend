@@ -16,7 +16,7 @@ from django.conf import settings
 from Doctors.models import Notification, Transaction, WalletTransaction
 from django.shortcuts import redirect
 from django.http import HttpResponseBadRequest, JsonResponse
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view,permission_classes
 from .serializers import WalletSerializer
 from .models import Wallet
 
@@ -29,6 +29,7 @@ from .utils import send_otp_via_email, send_verification
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
+from.permissions import IsPatient
 
 User = get_user_model()
 
@@ -234,7 +235,8 @@ class ResendOtpView(APIView):
 
                 
 class UserProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
+    print(permission_classes)
 
     def get(self, request):
         try:
@@ -247,7 +249,7 @@ class UserProfileView(APIView):
         return Response(serializer.data)
 
 class EditProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def get(self, request):
         try:
@@ -258,25 +260,35 @@ class EditProfileView(APIView):
         serializer = UserProfileSerializer(user_profile)
         return Response(serializer.data)
 
-
     def put(self, request):
-            try:
-                user_profile = UserProfile.objects.get(user=request.user)
-            except UserProfile.DoesNotExist:
-                return Response({'error': "UserProfile does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            user_profile = UserProfile.objects.get(user=request.user)
+        except UserProfile.DoesNotExist:
+            return Response({'error': "UserProfile does not exist"}, status=status.HTTP_404_NOT_FOUND)
 
-            serializer = UserProfileSerializer(user_profile, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            print("error",serializer.errors)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Create a serializer instance with partial updates allowed
+        serializer = UserProfileSerializer(user_profile, data=request.data, partial=True)
+
+        # Check if 'profile_pic' is in request.data and handle it properly
+        if 'profile_pic' in request.data and request.data['profile_pic'] == '':
+            # If the profile_pic field is provided but empty, set it to None
+            request.data['profile_pic'] = None
+
+        # Validate and save the serializer
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Log the serializer errors for debugging
+        print("error", serializer.errors)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 #######################################################################################################################################################
 
 class Doctors_list(ListAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsPatient]
+    
     serializer_class = DoctorProfileSerializer
 
     def get_queryset(self):
@@ -308,7 +320,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
 
 class SlotListView(ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
     serializer_class = SlotCreateSerializer
 
     def get_queryset(self):
@@ -386,9 +398,10 @@ class SlotListView(ListAPIView):
 
 
 class BookSlotView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def post(self, request, doctor_id, slot_id):
+        booking = None  # Initialize booking to None
         try:
             # Retrieve the doctor and slot based on the provided IDs
             doctor = get_object_or_404(DoctorProfile, id=doctor_id)
@@ -401,9 +414,6 @@ class BookSlotView(APIView):
             booking = Bookings.objects.create(user=request.user, doctor=doctor, slots=slot)
             print(f"Created booking: {booking.id} for user: {request.user.username}")
 
-            # Construct the notification message with the booking details
-            # Construct the notification message with the booking details
-
             if payment_method == 'wallet':
                 # Retrieve or create the user's wallet
                 wallet, created = Wallet.objects.get_or_create(user=request.user)
@@ -411,6 +421,7 @@ class BookSlotView(APIView):
                 # Check if the wallet balance is sufficient
                 if wallet.balance < slot.amount:
                     print("Insufficient wallet balance.")
+                    booking.delete()
                     return Response({"error": "Insufficient wallet balance."}, status=status.HTTP_400_BAD_REQUEST)
 
                 # Deduct the slot amount from the wallet
@@ -422,12 +433,13 @@ class BookSlotView(APIView):
                     wallet=wallet,
                     user=request.user,
                     booking=booking,
-                    payment_id=None,  # Set payment_id to None for now
+                    payment_id=None,  # No external payment ID for wallet transaction
                     currency='INR',
-                    status='completed',  # Assuming the payment is successful
+                    amount=slot.amount,  # Save slot amount in wallet transaction
+                    status='completed',  # Mark as completed since payment is through wallet
                 )
 
-                # Update the booking status to completed
+                # Update the booking status to pending
                 booking.status = 'pending'
                 booking.save()
                 booking.slots.is_booked = True
@@ -467,6 +479,7 @@ class BookSlotView(APIView):
                     booking=booking,
                     razorpay_order_id=razorpay_order['id'],
                     currency='INR',
+                    amount=slot.amount,  # Save slot amount in the transaction
                     status='pending'  # Set as pending until payment is completed
                 )
 
@@ -493,7 +506,14 @@ class BookSlotView(APIView):
             return Response({"error": "Slot not found or already booked."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             print(f"An error occurred: {str(e)}")
+            # Only clean up if booking exists
+            if booking:
+                booking.slots.is_booked = False
+                booking.slots.save()
+
+                booking.delete()
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
@@ -510,7 +530,9 @@ import json
 
 
 @csrf_exempt
+@permission_classes
 def payment_callback(request):
+    
     if request.method == "POST":
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
@@ -551,8 +573,8 @@ def payment_callback(request):
             transaction.save()
 
             # Mark booking as completed
-            transaction.booking.status = 'pending'
-            transaction.booking.slots.is_booked = True  # Mark the slot as booked
+            transaction.booking.status = 'pending'  # Updated status to 'pending' to match booking logic
+            transaction.booking.slots.is_booked = True
             transaction.booking.slots.save()
             transaction.booking.save()
 
@@ -573,15 +595,18 @@ def payment_callback(request):
         except razorpay.errors.SignatureVerificationError:
             # Invalid signature - mark transaction as failed
             transaction.status = 'failed'
+            transaction.booking.slots.is_booked = False
+            transaction.booking.slots.save()
+            transaction.booking.delete()
             transaction.save()
             return HttpResponseBadRequest("Payment verification failed.")
-
 
         
 
     
 
 @api_view(['PATCH'])
+@permission_classes([IsPatient]) 
 def update_status(request, pk):
     try:
         booking = Bookings.objects.get(pk=pk)
@@ -602,7 +627,7 @@ def update_status(request, pk):
 
 
 class MyAppointments(ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
     serializer_class = BookingSerializer
     def get_queryset(self):
         user = self.request.user
@@ -610,7 +635,7 @@ class MyAppointments(ListAPIView):
 
 
 class WalletDetailView(RetrieveAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
     serializer_class = WalletSerializer
 
     def retrieve(self, request, *args, **kwargs):
@@ -629,7 +654,7 @@ class WalletDetailView(RetrieveAPIView):
 
 
 class WalletPaymentCallbackView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPatient]
 
     def post(self, request):
         booking_id = request.data.get('booking_id')
@@ -661,6 +686,17 @@ class WalletPaymentCallbackView(APIView):
                 # Mark the booking as completed
                 wallet_transaction.booking.status = 'pending'
                 wallet_transaction.booking.save()
+
+
+                send_verification(
+                email=wallet_transaction.booking.user.email,
+                doctor_name=f"{wallet_transaction.booking.doctor.first_name} {wallet_transaction.booking.doctor.last_name}",
+                start_time=wallet_transaction.booking.slots.start_time,
+                end_time=wallet_transaction.booking.slots.end_time,
+                duration=wallet_transaction.booking.slots.duration,
+                date=wallet_transaction.booking.slots.start_date,
+                transaction=wallet_transaction # Pass the transaction object
+            )
 
                 # Optional: Send a confirmation email
                 # send_booking_confirmation_email(request.user, booking)

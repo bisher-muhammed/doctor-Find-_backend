@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model,authenticate
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 User = get_user_model()
 from Doctors.serializers import DoctorProfileSerializer, SlotCreateSerializer
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 
 
@@ -112,6 +113,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = '__all__'
 
+        extra_kwargs = {
+            'profile_pic': {'required': False}  
+        }
+
     def validate_first_name(self, value):
         """Ensure first name is alphabetic and not too short."""
         if not value.isalpha():
@@ -182,6 +187,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
             if not all(data.get(field) for field in ['city', 'state', 'country']):
                 raise serializers.ValidationError("City, state, and country must all be provided together.")
         return data
+    
+    def validate_profile_pic(self, value):
+        # Only validate if the value is provided (not None)
+        if value and not isinstance(value, InMemoryUploadedFile):
+            raise serializers.ValidationError("The submitted data was not a file.")
+        return value
 
 
 
@@ -213,6 +224,7 @@ from rest_framework import serializers
 
 class TransactionSerializer(serializers.ModelSerializer):
     amount = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = Transaction
@@ -226,13 +238,20 @@ class TransactionSerializer(serializers.ModelSerializer):
             'status',
             'amount',  # Include the amount from the related slot
             'created_at',
-            'updated_at'
+            'updated_at',
+            'username'
         ]
 
     def get_amount(self, obj):
         # Access the slot through the booking and return the amount
         if obj.booking and obj.booking.slots:
             return obj.booking.slots.amount
+        return None
+    
+
+    def get_username(self,obj):
+        if obj.user and obj.user.username:
+            return obj.user.username
         return None
 
 
@@ -249,6 +268,7 @@ class WalletSerializer(serializers.ModelSerializer):
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
     amount = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = WalletTransaction
@@ -260,7 +280,8 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
             'payment_id',
             'status',
             'amount',
-            'created_at'
+            'created_at',
+            'username'
         ]
 
     def get_amount(self, obj):
@@ -269,4 +290,8 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
             return obj.booking.slots.amount
         return None
     
+    def get_username(self,obj):
+        if obj.user and obj.user.username:
+            return obj.user.username
+        return None
 

@@ -248,7 +248,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
         return SlotCreateSerializer(slots, many=True).data
 
     def validate(self, data):
-        required_fields = ['first_name', 'last_name', 'specification', 'bio', 'experience', 'available_from', 'available_to']
+        required_fields = ['first_name', 'last_name', 'specification', 'bio', 'experience']
         for field in required_fields:
             if field not in data or not data.get(field):
                 raise serializers.ValidationError({field: "This field is required."})

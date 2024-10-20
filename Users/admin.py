@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from Chat.models import ChatMessage
 from .models import MyUser,UserProfile,Wallet
-from Doctors.models import Slots,Document,DoctorProfile,Bookings,Transaction
+from Doctors.models import Slots,Document,DoctorProfile,Bookings,Transaction,WalletTransaction
 
 admin.site.register(MyUser)
 admin.site.register(UserProfile)
@@ -13,3 +13,5 @@ admin.site.register(Bookings)
 admin.site.register(Transaction)
 admin.site.register(ChatMessage)
 admin.site.register(Wallet)
+admin.site.register(WalletTransaction)
+
