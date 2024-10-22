@@ -6,11 +6,10 @@ __pycache__/
 venv/
 .env
 
+
+
 # Media files
 media/
-*.mp4
-*.mp3
-
 # IDE specific files
 .vscode/
 .idea/

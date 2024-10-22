@@ -9,8 +9,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m^n#@g0dhfn!&i+hvkl71*#=3jtsicc*1p=8qh7bv)61hi#lka'
 
+import os
+
+from decouple import config
+
+SECRET_KEY = os.environ.get('SECRET_KEY')
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -53,7 +59,6 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'debug_toolbar',
-    'channels',
     
 ]
 
@@ -95,15 +100,13 @@ ASGI_APPLICATION = 'Backend.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'doctor',
-        'USER': 'postgres',
-        'PASSWORD': '8086',
-        'HOST': 'localhost',  # Set to the appropriate host, e.g., '127.0.0.1'
-        'PORT': '5432',       # Default PostgreSQL port
-        
+        'NAME': os.environ.get('POSTGRES_DB', 'doctor'),  # Use environment variable
+        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', '8086'),
+        'HOST': os.environ.get('DB_HOST', 'db'),  # Set to the service name in docker-compose
+        'PORT': os.environ.get('DB_PORT', '5432'),  # Default PostgreSQL port
     }
 }
-
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -224,9 +227,9 @@ AUTH_USER_MODEL = 'Users.MyUser'
 
 
 
-RAZORPAY_KEY_ID='rzp_test_HJ4Pt1x015HzyE'
+# RAZORPAY_KEY_ID='rzp_test_HJ4Pt1x015HzyE'
 
-RAZORPAY_KEY_SECRET='LyRxETPRtoJSbbPYSlPYNcad'
+# RAZORPAY_KEY_SECRET='LyRxETPRtoJSbbPYSlPYNcad'
 
 
 # CHANNEL_LAYERS = {

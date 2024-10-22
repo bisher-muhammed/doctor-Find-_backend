@@ -1,8 +1,6 @@
 from datetime import timedelta,datetime
 from venv import logger
 from django.utils import timezone
-from flask import Response
-from grpclib import Status
 from rest_framework import serializers,viewsets
 from Users.models import MyUser  # Assuming this is the custom user model
 from django.contrib.auth import authenticate
@@ -77,7 +75,7 @@ class OtpVerificationSerializer(serializers.Serializer):
 
 
 
-from django.utils.timezone import make_aware, utc
+
 
 
 class SlotCreateSerializer(serializers.ModelSerializer):

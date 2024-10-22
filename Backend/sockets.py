@@ -39,18 +39,18 @@ async def send_message(sid, data):
     voice_message = data.get('voice_message')
     
     # Use .get() to avoid KeyError if 'sender_id' is missing
-    sender_id = data.get('sender_id')
+    sender = data.get('sender')
 
-    if sender_id is None:
-        print("Error: 'sender_id' is missing from the data")
+    if sender is None:
+        print("Error: 'sender' is missing from the data")
         return
 
-    print(f"Message from {sender_id}: {content}")
+    print(f"Message from {sender}: {content}")
 
     # Emit the message to the room
     await sio.emit('receive_message', {
         'content': content,
-        'sender_id': sender_id,
+        'sender': sender,
         'image': image,
         'video': video,
         'voice_message':voice_message,
@@ -64,14 +64,14 @@ async def call(sid, data):
     print('Call data received:', data)
     room_id = data['room_id']
     callId = data.get('callId', '')
-    sender_id = data['sender_id']
+    sender = data['sender']
     content = data.get('message', '')
 
     # Emit the message to the room
     await sio.emit('receive_message', {
         'content': content,
         'callId': callId,
-        'sender_id': sender_id,
+        'sender': sender,
     }, room=room_id)
 
 # Handle room joining for the call

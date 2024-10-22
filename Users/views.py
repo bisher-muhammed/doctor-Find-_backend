@@ -10,7 +10,6 @@ from rest_framework.views import APIView
 from .serializers import *
 from rest_framework.generics import ListAPIView,CreateAPIView,RetrieveAPIView
 from Doctors.serializers import DoctorProfileSerializer,SlotCreateSerializer
-import razorpay
 from django.db.models import Q
 from django.conf import settings
 from Doctors.models import Notification, Transaction, WalletTransaction
@@ -19,13 +18,14 @@ from django.http import HttpResponseBadRequest, JsonResponse
 from rest_framework.decorators import api_view,permission_classes
 from .serializers import WalletSerializer
 from .models import Wallet
+import razorpay
 
 
 
 
 from Doctors.models import DoctorProfile,Slots,Bookings
 from .models import UserProfile  # Ensure UserProfile is imported
-from .utils import send_otp_via_email, send_verification
+from .utils import *
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken

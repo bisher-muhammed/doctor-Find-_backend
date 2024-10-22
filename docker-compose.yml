@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16  # Use the latest PostgreSQL image
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 8086
+      POSTGRES_DB: doctor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  django:
+    build:  
+      context: .  # Use the current directory as the build context
+      dockerfile: Dockerfile  # Optional if your Dockerfile is named 'Dockerfile'
+    ports:
+      - "8000:8000"  # Map host port 8000 to container port 8000
+    depends_on:
+      - db  # Ensure that the db service is started before django
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DB=doctor  # Database name
+      - POSTGRES_USER=postgres  # Database user
+      - POSTGRES_PASSWORD=8086  # Database password
+      - DB_HOST=db  # Host name for the database
+      - DB_PORT=5432  # Port for the database
+    command: gunicorn Backend.wsgi:application --bind 0.0.0.0:8000 --workers 3
+
+volumes:
+  postgres_data:  # Use a named volume for PostgreSQL data
+
