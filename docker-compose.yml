@@ -1,4 +1,19 @@
 services:
+  
+  
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      -  "8080:80"      # Expose Nginx on port 80
+    volumes:
+      - ./staticfiles:/usr/share/nginx/html/static  # Serve static files
+      - ./nginx.conf:/etc/nginx/nginx.conf  # Custom Nginx configuration
+    depends_on:
+      - django  # Wait for Django to be ready
+
+
+
   db:
     image: postgres:16  # Use the latest PostgreSQL image
     restart: always

@@ -14,9 +14,11 @@ import os
 
 from decouple import config
 
-SECRET_KEY = os.environ.get('SECRET_KEY')
-RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
-RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
+SECRET_KEY = config('SECRET_KEY')
+RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID')
+RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET')
+
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -138,6 +140,19 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+
+
+# This is where Django will store static files after running `collectstatic`
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Directories where Django will look for additional static files
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
+
+# Media files (if needed for user uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
