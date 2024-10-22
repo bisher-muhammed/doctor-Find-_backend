@@ -15,6 +15,7 @@ services:
     build:  
       context: .  # Use the current directory as the build context
       dockerfile: Dockerfile  # Optional if your Dockerfile is named 'Dockerfile'
+    image: doctor-find-backend-django  # Add this line for a valid image name
     ports:
       - "8000:8000"  # Map host port 8000 to container port 8000
     depends_on:
