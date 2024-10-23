@@ -139,15 +139,14 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
-
-# This is where Django will store static files after running `collectstatic`
+# Directory where `collectstatic` will store all static files for deployment
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Directories where Django will look for additional static files
+# Directories where Django will search for additional static files in development
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
+    os.path.join(BASE_DIR, "Backend/static"),
 ]
 
 # Media files (if needed for user uploads)
