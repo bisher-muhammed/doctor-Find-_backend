@@ -29,6 +29,10 @@ CORS_ALLOW_HEADERS = ["*"]
 CSRF_COOKIE_SECURE = False  # Should be True in production with HTTPS
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000',
                         'http://localhost:5173',
+                        'http://localhost:3000/',
+                         "http://localhost:8080",
+                        "http://127.0.0.1:8080",
+
                         
                         ]
 
@@ -139,14 +143,13 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Directory where `collectstatic` will store all static files for deployment
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Directories where Django will search for additional static files in development
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "Backend/static"),
+    os.path.join(BASE_DIR, 'Backend/static'),  # Optional: Add any additional static directories if necessary
 ]
 
 # Media files (if needed for user uploads)
@@ -164,7 +167,10 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # The origin of your frontend app
+    "http://localhost:5173", 
+    "http://localhost:3000",  # No trailing slash
+    "http://localhost:8080",   # Removed duplicate
+    "http://127.0.0.1:8080",   # Optional, keep if needed
 ]
 
 CORS_ALLOW_METHODS = [
@@ -256,5 +262,6 @@ AUTH_USER_MODEL = 'Users.MyUser'
 
 SOCKETIO_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173"
+    "http://127.0.0.1:5173",
+    'http://localhost:3000/'
 ]

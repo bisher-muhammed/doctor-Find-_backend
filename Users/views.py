@@ -37,7 +37,8 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        print("Login attempts:", request.data)
+        print("Login attemptsssssss:", request.data)
+
 
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -524,25 +525,25 @@ class BookSlotView(APIView):
 
         
     
+from django.http import JsonResponse, HttpResponseBadRequest
+from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.permissions import IsAuthenticated
+from razorpay.errors import SignatureVerificationError
 import json
 
+class PaymentCallback(APIView):
+    permission_classes = [IsAuthenticated]
 
-
-@csrf_exempt
-@permission_classes
-def payment_callback(request):
-    
-    if request.method == "POST":
+    @csrf_exempt  # Exempt from CSRF if needed
+    def post(self, request):
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
-        # Parse the request body if it's JSON
         try:
             data = json.loads(request.body.decode('utf-8'))
         except json.JSONDecodeError:
             return HttpResponseBadRequest("Invalid JSON data.")
 
-        # Extract payment details
         try:
             razorpay_payment_id = data['razorpay_payment_id']
             razorpay_order_id = data['razorpay_order_id']
@@ -551,13 +552,11 @@ def payment_callback(request):
         except KeyError as e:
             return HttpResponseBadRequest(f"Missing field: {str(e)}")
 
-        # Retrieve the transaction using the Razorpay order ID
         try:
             transaction = Transaction.objects.get(razorpay_order_id=razorpay_order_id)
         except Transaction.DoesNotExist:
             return HttpResponseBadRequest("Transaction not found.")
 
-        # Verify the payment signature
         params_dict = {
             'razorpay_order_id': razorpay_order_id,
             'razorpay_payment_id': razorpay_payment_id,
@@ -566,19 +565,16 @@ def payment_callback(request):
 
         try:
             client.utility.verify_payment_signature(params_dict)
-            # Payment is valid
             transaction.payment_id = razorpay_payment_id
             transaction.razorpay_signature = razorpay_signature
-            transaction.status = 'completed'  # Changed from 'successful' to 'completed'
+            transaction.status = 'completed'
             transaction.save()
 
-            # Mark booking as completed
-            transaction.booking.status = 'pending'  # Updated status to 'pending' to match booking logic
+            transaction.booking.status = 'pending'
             transaction.booking.slots.is_booked = True
             transaction.booking.slots.save()
             transaction.booking.save()
 
-            # Send verification email or confirmation
             send_verification(
                 email=transaction.booking.user.email,
                 doctor_name=f"{transaction.booking.doctor.first_name} {transaction.booking.doctor.last_name}",
@@ -586,14 +582,12 @@ def payment_callback(request):
                 end_time=transaction.booking.slots.end_time,
                 duration=transaction.booking.slots.duration,
                 date=transaction.booking.slots.start_date,
-                transaction=transaction  # Pass the transaction object
+                transaction=transaction
             )
 
-            # Respond with success message
-            return JsonResponse({"message": "Payment verified successfully."}, status=status.HTTP_200_OK)
+            return JsonResponse({"message": "Payment verified successfully."}, status=200)
 
         except razorpay.errors.SignatureVerificationError:
-            # Invalid signature - mark transaction as failed
             transaction.status = 'failed'
             transaction.booking.slots.is_booked = False
             transaction.booking.slots.save()

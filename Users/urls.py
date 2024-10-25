@@ -18,7 +18,7 @@ urlpatterns = [
     
     path('book-slot/<int:doctor_id>/<int:slot_id>/', BookSlotView.as_view(), name='book_slot'),
     path('my-appointments/', MyAppointments.as_view(), name='my_appointments'),
-    path('verify-payment/', payment_callback, name='payment_callback'),
+    path('verify-payment/', PaymentCallback.as_view(), name='payment_callback'),
     path('bookings/<int:pk>/update/', update_status, name='update_booking_status'),
     path('wallet_view/',WalletDetailView.as_view(),name='Wallet_view'),
     path('wallet_payment/',WalletPaymentCallbackView.as_view(),name='Wallet_view')
