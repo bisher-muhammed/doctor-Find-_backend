@@ -19,7 +19,7 @@ FindDoctor is a Django-based backend for an online doctor consultation platform.
 
 - Python (>=3.x)
 - Django (latest version)
-- PostgreSQL (or SQLite for development)
+- PostgreSQL (or Psql for development)
 - Docker (optional, for containerized deployment)
 
 ### Setup Instructions
