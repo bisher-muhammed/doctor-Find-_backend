@@ -16,7 +16,8 @@ urlpatterns = [
     path('admin/users_list/', UsersList.as_view(),name = 'users_list'),
     path('admin/revenue/',Total_Revenue.as_view(),name='revienue_list'),
     path('admin/total-revenue-and-counts/', TotalRevenueAndCounts.as_view(), name='total-revenue-and-counts'),
-    path('admin/sales_report/',SalesReportView.as_view(),name='sales_report')
+    path('admin/sales_report/',SalesReportView.as_view(),name='sales_report'),
+    path('admin/bookings/',AdminBookings.as_view(),name='admin-bookings')
 
 
     

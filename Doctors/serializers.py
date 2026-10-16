@@ -6,6 +6,7 @@ from Users.models import MyUser  # Assuming this is the custom user model
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import DoctorProfile, Notification, Slots,Document
+import re
 
 class DoctorRegisterSerializer(serializers.ModelSerializer):
     user_type = serializers.ChoiceField(choices=MyUser.USER_TYPE_CHOICES, default='doctor')
@@ -18,9 +19,33 @@ class DoctorRegisterSerializer(serializers.ModelSerializer):
             'user_type': {'read_only': True}
         }
 
+    def validate_username(self, value):
+        if not value.isalnum():
+            raise serializers.ValidationError("Username must be alphanumeric.")
+        return value
+
+    def validate_email(self, value):
+        if MyUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("This email is already registered.")
+        return value
+
+    def validate_password(self, value):
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        if not re.search(r"[A-Z]", value):
+            raise serializers.ValidationError("Password must contain at least one uppercase letter.")
+        if not re.search(r"[a-z]", value):
+            raise serializers.ValidationError("Password must contain at least one lowercase letter.")
+        if not re.search(r"\d", value):
+            raise serializers.ValidationError("Password must contain at least one digit.")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
+            raise serializers.ValidationError("Password must contain at least one special character.")
+        return value
+
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         validated_data['user_type'] = 'doctor'
+
         instance = self.Meta.model(**validated_data)
 
         if password is not None:
@@ -28,7 +53,7 @@ class DoctorRegisterSerializer(serializers.ModelSerializer):
         else:
             raise serializers.ValidationError({"password": "Password is required."})
 
-        
+        instance.save()
         return instance
 
 
@@ -71,8 +96,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class OtpVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    otp = serializers.CharField(max_length=6)
-
+    otp = serializers.CharField(max_length=4)
 
 
 
@@ -102,11 +126,16 @@ class SlotCreateSerializer(serializers.ModelSerializer):
 
         if start_time >= end_time:
             raise serializers.ValidationError('End time must be after start time.')
+        
+        # Fixed: Use >= instead of > for consistency
+        if start_date > end_date:
+            raise serializers.ValidationError('End date must be greater than or equal to start date.')
 
-        if slot_duration < 1:
-            raise serializers.ValidationError('Duration must be at least 1 minute.')
+        if slot_duration < 20:
+            raise serializers.ValidationError('Duration must be at least 20 minute.')
 
-        if start_time < timezone.now():
+        # Fixed: Compare dates properly, not datetime with timezone
+        if start_date < timezone.now().date():
             raise serializers.ValidationError('Cannot create slots in the past.')
 
         doctor = self.context['request'].user.doctorprofile
@@ -122,22 +151,27 @@ class SlotCreateSerializer(serializers.ModelSerializer):
 
         return data
     
-    def calculate_amound(self,duration):
+    def calculate_amound(self, duration):
         base_amound = 200
-        if duration <=30:
+        if duration <= 30:
             return base_amound
         else:
-            additional_time = duration -30
-            additional_amount = (additional_time//30)*100
+            additional_time = duration - 30
+            additional_amount = (additional_time // 30) * 100
             return base_amound + additional_amount
 
     def create(self, validated_data):
-        doctor = self.context['request'].user.doctorprofile  # Assign the doctor from the logged-in user's profile
+        # Add explicit validation check here as well for safety
+        start_date = validated_data.get('start_date')
+        end_date = validated_data.get('end_date')
+        
+        if start_date > end_date:
+            raise serializers.ValidationError('End date must be greater than or equal to start date.')
+        
+        doctor = self.context['request'].user.doctorprofile
         start_time = validated_data.get('start_time')
         end_time = validated_data.get('end_time')
         slot_duration = validated_data.get('duration')
-        start_date = validated_data.get('start_date')
-        end_date = validated_data.get('end_date')
 
         slots_created = 0
         current_date = start_date
@@ -169,7 +203,7 @@ class SlotCreateSerializer(serializers.ModelSerializer):
                             duration=slot_duration,
                             start_date=start_date,
                             end_date=current_date,
-                            amount = amount
+                            amount=amount
                         )
                         new_slot.save()
                         slots_created += 1
@@ -178,10 +212,13 @@ class SlotCreateSerializer(serializers.ModelSerializer):
 
             current_date += timedelta(days=1)
 
+        # If no slots were created and the date range was valid, it might be due to past dates
+        if slots_created == 0:
+            raise serializers.ValidationError('No slots could be created. Please check your date and time parameters.')
+
         return {
             'slots_created': slots_created
         }
-
 
 
 
@@ -206,14 +243,21 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 
+from rest_framework import serializers
+from .models import DoctorProfile
+from .serializers import DocumentSerializer, SlotCreateSerializer
+from django.utils import timezone
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from datetime import date
+
+
 class DoctorProfileSerializer(serializers.ModelSerializer):
     username = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
-    documents = DocumentSerializer(many=True, read_only=True)  # Assuming documents are read-only in this context
-    slots = serializers.SerializerMethodField()  # Add this line
+    documents = DocumentSerializer(many=True, read_only=True)
+    slots = serializers.SerializerMethodField()
     is_active = serializers.SerializerMethodField()
-    
 
     class Meta:
         model = DoctorProfile
@@ -221,13 +265,14 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
             'username', 'email', 'phone_number',
             'id', 'first_name', 'last_name', 'specification',
             'bio', 'experience', 
-            'is_verified',
-            'profile_pic',
-            'documents',
-            'slots',
-            'is_active',
+            'is_verified', 'profile_pic',
+            'documents', 'slots', 'is_active',
         ]
+        extra_kwargs = {
+            'profile_pic': {'required': False}
+        }
 
+    # --- Related User Fields ---
     def get_username(self, obj):
         return obj.user.username
 
@@ -236,29 +281,56 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
 
     def get_phone_number(self, obj):
         return obj.user.phone_number
-    
-    def get_is_active(self,obj):
+
+    def get_is_active(self, obj):
         return obj.user.is_active
-    
 
     def get_slots(self, obj):
         slots = obj.slots.filter(start_time__gte=timezone.now()).order_by('start_time')
         return SlotCreateSerializer(slots, many=True).data
 
+    # --- Field Validations ---
+    def validate_first_name(self, value):
+        if not value.isalpha():
+            raise serializers.ValidationError("First name must contain only letters.")
+        if len(value) < 2:
+            raise serializers.ValidationError("First name must be at least 2 characters.")
+        return value
+
+    def validate_last_name(self, value):
+        if not value.isalpha():
+            raise serializers.ValidationError("Last name must contain only letters.")
+        if len(value) < 2:
+            raise serializers.ValidationError("Last name must be at least 2 characters.")
+        return value
+
+    def validate_bio(self, value):
+        if len(value) < 10:
+            raise serializers.ValidationError("Bio must be at least 10 characters.")
+        if len(value) > 500:
+            raise serializers.ValidationError("Bio cannot exceed 500 characters.")
+        return value
+
+    def validate_experience(self, value):
+        if not isinstance(value, int):
+            raise serializers.ValidationError("Experience must be an integer.")
+        if value < 0:
+            raise serializers.ValidationError("Experience must be a positive number.")
+        return value
+
+    def validate_profile_pic(self, value):
+        if value and isinstance(value, InMemoryUploadedFile):
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError("Image size must be under 5MB.")
+            if not value.content_type.startswith('image/'):
+                raise serializers.ValidationError("Only image files are allowed.")
+        return value
+
     def validate(self, data):
-        required_fields = ['first_name', 'last_name', 'specification', 'bio', 'experience']
-        for field in required_fields:
-            if field not in data or not data.get(field):
-                raise serializers.ValidationError({field: "This field is required."})
-
-        if 'experience' in data:
-            if not isinstance(data['experience'], int):
-                raise serializers.ValidationError({'experience': 'Experience must be an integer.'})
-            if data['experience'] < 0:
-                raise serializers.ValidationError({'experience': 'Experience must be a positive integer.'})
-
+        # Optional: group validation logic
         return data
 
+    # --- Create / Update ---
     def create(self, validated_data):
         user = self.context['request'].user
         doctor_profile, created = DoctorProfile.objects.get_or_create(user=user, defaults=validated_data)
@@ -273,6 +345,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
 
 
 

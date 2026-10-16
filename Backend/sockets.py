@@ -1,15 +1,18 @@
 import socketio
 
-
-
 # Initialize the AsyncServer with CORS allowed origins
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins=['http://localhost:5173', 'http://127.0.0.1:5173']
+    cors_allowed_origins=[
+        'https://finddoctor.space',
+        'https://www.finddoctor.space',  # ← ADDED THIS
+        'http://localhost:5173'
+    ],
+    logger=True,
+    engineio_logger=True,
+    ping_timeout=60,
+    ping_interval=25,
 )
-
-
-
 
 
 # Define event handlers directly here

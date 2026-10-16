@@ -13,7 +13,8 @@ urlpatterns = [
     path('doctor/login/', DoctorLoginView.as_view(), name='doctor_login'),
     path('doctor/resend_otp/',ResendOtpView.as_view(),name='resend_otp'),
     path('doctor/generate_slots/', GenerateSlots.as_view(), name='generate_slots'),
-    path('doctor/slots/', SlotListView.as_view(), name='slots'),  
+    path('doctor/slots/', SlotListView.as_view(), name='slots'),
+    path("doctor/active-reservation/",active_reservation,name="active-reservation"),  
     
     path('doctor/single_slot/<int:slot_id>/', EditSlot.as_view(), name='edit-slot'),
     path('doctor/delete_slot/<int:slot_id>/', DeleteSlotView.as_view(), name='delete_slot'),
@@ -33,6 +34,8 @@ urlpatterns = [
     path('doctor/notification/',DotorNotification.as_view(),name='doctor-notifications'),
     path('doctor/notification/<int:notification_id>/', DotorNotification.as_view(), name='doctor-notification-detail'),  
     path('doctor/notification/unread-count/', UnreadNotificationCount.as_view(), name='unread_notification_count'),
+    path("doctor/dashboard/analytics/",doctor_dashboard_analytics,name="doctor-revenue-analytics"),
+    
 
 ]
 

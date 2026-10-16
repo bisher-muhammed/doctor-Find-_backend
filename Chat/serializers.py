@@ -3,40 +3,38 @@ from Users.models import MyUser
 from .models import ChatMessage, ChatRoom
 from Doctors.models import DoctorProfile
 from Users.models import UserProfile
+from django.contrib.auth import get_user_model
+
+MyUser = get_user_model()
+
 
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     patient_username = serializers.CharField(source='patient.username', read_only=True)
-    # patient_profile = serializers.SerializerMethodField()
-
-    patient = serializers.PrimaryKeyRelatedField(queryset=MyUser.objects.filter(user_type='patient'))
-    doctor_first_name = serializers.SerializerMethodField()
-    doctor_profile = serializers.SerializerMethodField()  
     patient_profile = serializers.SerializerMethodField()
+    doctor_first_name = serializers.SerializerMethodField()
+    doctor_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatRoom
-        fields = ['id', 'patient', 'doctor', 'doctor_first_name', 'doctor_profile', 'created_at','patient_username','patient_profile']
+        fields = ['id', 'patient', 'doctor', 'doctor_first_name', 'doctor_profile', 'created_at', 'patient_username', 'patient_profile']
 
     def get_doctor_first_name(self, obj):
-        return obj.doctor.first_name
+        return obj.doctor.first_name if obj.doctor else None
 
     def get_doctor_profile(self, obj):
-        # Assuming 'doctor' is a ForeignKey to a `DoctorProfile` model
-        if obj.doctor and obj.doctor.profile_pic:
-            return obj.doctor.profile_pic.url  # Return URL to the doctor's profile picture
+        # Retrieve doctor's profile picture URL if available
+        if obj.doctor and hasattr(obj.doctor, 'profile_pic'):
+            return obj.doctor.profile_pic.url
         return None
-    
+
     def get_patient_profile(self, obj):
-    # Assuming 'patient' is a ForeignKey to MyUser
+        # Retrieve patient's profile picture URL if available
         if obj.patient and obj.patient.User_profile.exists():
-            profile = obj.patient.User_profile.first()  # Get the first UserProfile related to the patient
+            profile = obj.patient.User_profile.first()
             if profile.profile_pic:
-                return profile.profile_pic.url  # Return URL to the user's profile picture
+                return profile.profile_pic.url
         return None
-
-    
-
 
     def validate(self, attrs):
         patient = attrs.get('patient')
@@ -46,6 +44,9 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         if ChatRoom.objects.filter(patient=patient, doctor=doctor).exists():
             raise serializers.ValidationError("A chat room with these participants already exists.")
         return attrs
+
+
+    
 
 
 

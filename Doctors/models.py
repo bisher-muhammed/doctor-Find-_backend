@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
 from Users.models import Wallet
+from django.db.models import Q
 
 
 
@@ -18,7 +19,7 @@ class DoctorProfile(models.Model):
     specification = models.CharField(max_length=100,null=True,blank= True)
     bio = models.TextField()
     experience = models.IntegerField(default=0)
-    profile_pic = models.ImageField(upload_to='media/doctor/profile_pic', blank=True, null=True)
+    profile_pic = models.ImageField(upload_to='doctor/profile_pic', blank=True, null=True)
     is_verified = models.BooleanField(default=False)
     
 
@@ -35,28 +36,39 @@ class DoctorProfile(models.Model):
     
 
 
+
+
 class Slots(models.Model):
-    doctor = models.ForeignKey('DoctorProfile', on_delete=models.CASCADE, related_name='slots')
+    doctor = models.ForeignKey(
+        "DoctorProfile",
+        on_delete=models.CASCADE,
+        related_name="slots",
+    )
+
     start_time = models.DateTimeField()
     start_date = models.DateField()
+
     end_time = models.DateTimeField()
-    duration = models.PositiveIntegerField()  # Add duration field here
+    end_date = models.DateField()
+    duration = models.PositiveIntegerField()
     is_blocked = models.BooleanField(default=False)
     is_booked = models.BooleanField(default=False)
-    amount = models.DecimalField(max_digits=10,decimal_places=2,default=Decimal('0.00'))
-
-
-    end_date = models.DateField()
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
 
     def save(self, *args, **kwargs):
-        # Convert duration to hours if it's 60 minutes or more
-        if self.duration >= 60:
-            self.duration = timedelta(minutes=self.duration).total_seconds() / 3600  # Convert to hours
+        super().save(*args, **kwargs)
 
-        super(Slots, self).save(*args, **kwargs)
-    
     def __str__(self):
-        return f"{self.doctor.user.username}: {self.start_time.strftime('%I:%M %p')} - {self.end_time.strftime('%I:%M %p')}"
+        return (
+            f"{self.doctor.user.username}: "
+            f"{self.start_time.strftime('%I:%M %p')} - "
+            f"{self.end_time.strftime('%I:%M %p')}"
+        )
+
     
 
 
@@ -75,21 +87,117 @@ class Document(models.Model):
 from django.db import models
 
 class Bookings(models.Model):
+    AWAITING_PAYMENT = "awaiting_payment"
+    PENDING = "pending"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('cancelled', 'Cancelled'),
-        ('completed', 'Completed'),
+        (AWAITING_PAYMENT, "Awaiting Payment"),
+        (PENDING, "Pending"),
+        (COMPLETED, "Completed"),
+        (CANCELLED, "Cancelled"),
+        (EXPIRED, "Expired"),
     ]
-    
-    user = models.ForeignKey(MyUser, on_delete=models.CASCADE)
-    doctor = models.ForeignKey('DoctorProfile', on_delete=models.CASCADE, related_name='booking')
-    slots = models.OneToOneField(Slots, on_delete=models.CASCADE,related_name='bookings')
-    created_at = models.DateTimeField(auto_now=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
-    
+
+    ACTIVE_STATUSES = (
+        AWAITING_PAYMENT,
+        PENDING,
+    )
+
+    VISIBLE_STATUSES = (
+        PENDING,
+        COMPLETED,
+        CANCELLED,
+        EXPIRED
+        
+    )
+
+    user = models.ForeignKey(
+        MyUser,
+        on_delete=models.CASCADE,
+    )
+
+    doctor = models.ForeignKey(
+        "DoctorProfile",
+        on_delete=models.CASCADE,
+        related_name="booking",
+    )
+    slots = models.ForeignKey(
+        Slots,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+    )
+
+    idempotency_key = models.UUIDField(
+        null=True,
+        blank=True,
+    )
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=[
+            ("wallet", "Wallet"),
+            ("razorpay", "Razorpay"),
+        ],
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=AWAITING_PAYMENT,
+    )
+
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "idempotency_key"],
+                condition=Q(idempotency_key__isnull=False),
+                name="unique_booking_idempotency_per_user",
+            ),
+            models.UniqueConstraint(
+                fields=["slots"],
+                condition=Q(
+                    status__in=["awaiting_payment", "pending"]
+                ),
+                name="unique_active_booking_per_slot",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["user", "-created_at"],
+                name="booking_user_created_idx",
+            ),
+            models.Index(
+                fields=["status", "expires_at"],
+                name="booking_status_expiry_idx",
+            ),
+        ]
+
+    def reservation_expired(self, now=None):
+        if self.status != self.AWAITING_PAYMENT:
+            return False
+
+        if now is None:
+            now = timezone.now()
+
+        return self.expires_at is None or self.expires_at <= now
+
     def __str__(self):
-        return f"Booking by {self.user.username} with {self.doctor.user.username} on {self.slots.start_time}"
-    
+        return (
+            f"Booking {self.pk} - {self.user} - "
+            f"{self.slots} - {self.status}"
+        )
+
 
 
 
@@ -99,21 +207,32 @@ class Transaction(models.Model):
     payment_id = models.CharField(max_length=100, null=True, blank=True)
     razorpay_order_id = models.CharField(max_length=100, null=True, blank=True)
     razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
+    razorpay_refund_id = models.CharField(max_length=100, null=True, blank=True)
     currency = models.CharField(max_length=10, default='INR')
     status = models.CharField(max_length=20, choices=[
         ('pending', 'Pending'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
+        ('refund_pending', 'Refund Pending'),
+        ("refund_processing", "Refund Processing"),
+        ('refunded', 'Refunded'),
+        ("refund_failed", "Refund Failed"),
     ], default='pending')
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))  # Add amount field
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))  
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    refund_idempotency_key = models.CharField(max_length=64,unique=True,null=True,blank=True,)
+
+
 
     def save(self, *args, **kwargs):
-        # Copy the slot amount when the transaction is created
-        if self.booking and self.booking.slots:
-            self.amount = self.booking.slots.amount  # Store slot's amount at the time of booking
+        # Snapshot the slot amount only when creating this transaction.
+        if self._state.adding and self.booking_id and self.booking.slots_id:
+            self.amount = self.booking.slots.amount
+
         super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"Transaction {self.payment_id} - {self.currency} - Amount: {self.amount}"
@@ -123,32 +242,85 @@ class Transaction(models.Model):
 
 
 from django.db import models
-from django.conf import settings  # For referencing AUTH_USER_MODEL
+from django.conf import settings  
 
 class WalletTransaction(models.Model):
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-    ]
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wallet_transactions",
+    )
 
-    wallet = models.ForeignKey('Users.Wallet', on_delete=models.CASCADE, related_name='transactions')
-    currency = models.CharField(max_length=10, default='INR')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wallet_transactions')
-    booking = models.ForeignKey(Bookings, on_delete=models.SET_NULL, null=True, blank=True)  # Changed to SET_NULL
-    payment_id = models.CharField(max_length=100, null=True, blank=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))  # Add amount field
-    created_at = models.DateTimeField(auto_now_add=True)
+    wallet = models.ForeignKey(
+        "Users.Wallet",
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+
+    booking = models.ForeignKey(
+        Bookings,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    payment_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
+
+    currency = models.CharField(
+        max_length=10,
+        default="INR",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
+            ("refund_pending", "Refund Pending"),
+            ("refund_processing", "Refund Processing"),
+            ("refunded", "Refunded"),
+            ("refund_failed", "Refund Failed"),
+        ],
+        default="pending",
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    refund_idempotency_key = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+    )
 
     def save(self, *args, **kwargs):
-        # Copy the slot amount when the wallet transaction is created
-        if self.booking and self.booking.slots:
-            self.amount = self.booking.slots.amount  # Store slot's amount at the time of booking
+        if (
+            self._state.adding
+            and self.booking_id
+            and self.amount == Decimal("0.00")
+        ):
+            self.amount = self.booking.slots.amount
+
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Wallet Transaction {self.payment_id} - Status: {self.status} - Amount: {self.amount}"
+        return (
+            f"Wallet Transaction {self.payment_id} - "
+            f"{self.currency} - Amount: {self.amount}"
+        )
+
 
 
 class Notification(models.Model):

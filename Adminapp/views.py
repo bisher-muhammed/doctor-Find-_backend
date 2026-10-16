@@ -25,7 +25,6 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from Users.serializers import BookingSerializer
 from Doctors.models import Bookings
 
-
 class AdminLogin(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -44,7 +43,10 @@ class AdminLogin(APIView):
 
             if not email or not password:
                 return Response({'detail': 'Email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
-
+            
+            print("request.data =", request.data)
+            print("email =", repr(email))
+            print("password =", repr(password))
             user = authenticate(username=email, password=password)
             print('user:',user)
 
@@ -71,8 +73,6 @@ class AdminLogin(APIView):
 
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-
 
 import logging
 logger = logging.getLogger(__name__)
@@ -333,10 +333,12 @@ class TotalRevenueAndCounts(generics.RetrieveAPIView):
         total_revenue = total_transaction_revenue + total_wallet_revenue
 
         # Count of all doctors
-        doctor_count = MyUser.objects.filter(user_type='doctor').count()
+        doctor_count = DoctorProfile.objects.filter(is_verified =True).count()
+        print(doctor_count)
+
 
         # Count of all patients
-        patient_count = MyUser.objects.filter(user_type='patient').count()
+        patient_count = MyUser.objects.filter(user_type ='patient').count()
 
         # Prepare the response
         return Response({
@@ -396,3 +398,16 @@ class SalesReportView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+    
+
+class AdminBookings(ListAPIView):
+    permission_classes = [IsAdmin]
+
+
+    def get(self,request,*args,**kwargs):
+
+        complete_bookings = Bookings.objects.all()
+        print(complete_bookings)
+        serializer = BookingSerializer(complete_bookings,many=True)
+
+        return Response(serializer.data,status=status.HTTP_200_OK)

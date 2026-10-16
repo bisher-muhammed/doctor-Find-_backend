@@ -22,9 +22,9 @@ class ChatMessage(models.Model):
 
 
 
-    image = models.ImageField(upload_to='media/doctor/chat_images/', null=True, blank=True)
-    video = models.FileField(upload_to='media/doctor/chat_videos/', null=True, blank=True)
-    voice_message = models.FileField(upload_to='media/doctor/chat_voice_messages/', null=True, blank=True)
+    image = models.ImageField(upload_to='doctor/chat_images/', null=True, blank=True)
+    video = models.FileField(upload_to='doctor/chat_videos/', null=True, blank=True)
+    voice_message = models.FileField(upload_to='doctor/chat_voice_messages/', null=True, blank=True)
 
 
 

@@ -18,10 +18,18 @@ urlpatterns = [
     
     path('book-slot/<int:doctor_id>/<int:slot_id>/', BookSlotView.as_view(), name='book_slot'),
     path('my-appointments/', MyAppointments.as_view(), name='my_appointments'),
+    path('my-appointments/<int:pk>/', AppointmentDetailsView.as_view(), name='appointment_details'),
     path('verify-payment/', PaymentCallback.as_view(), name='payment_callback'),
     path('bookings/<int:pk>/update/', update_status, name='update_booking_status'),
+    path("cancel-appointment/<int:booking_id>/", cancel_appointment, name="cancel_appointment"),
     path('wallet_view/',WalletDetailView.as_view(),name='Wallet_view'),
-    path('wallet_payment/',WalletPaymentCallbackView.as_view(),name='Wallet_view')
+    path('wallet_payment/',WalletPaymentCallbackView.as_view(),name='Wallet_view'),
+    path('cancel-reservation/<int:booking_id>/', cancel_pending_reservation, name='cancel_pending_reservation'),
+    path("cancel-wallet-payment/<int:booking_id>/", cancel_wallet_appointment, name="cancel_wallet_payment"),
+    path("wallet/topup/create/",create_wallet_topup,name="create_wallet_topup"),
+    path("wallet/topup/callback/",WalletTopUpCallbackView.as_view(),name="wallet_topup_callback")
+
+    
 
 
 

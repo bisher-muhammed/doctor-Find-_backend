@@ -17,39 +17,37 @@ from decouple import config
 SECRET_KEY = config('SECRET_KEY')
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET')
+REACT_APP_API_URL = config('REACT_APP_API_URL', default='http://127.0.0.1:8000')
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+
+ALLOWED_HOSTS = [
+    "api.finddoctor.space", 
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173", 
+    "http://127.0.0.1:5173",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = ["*"]
 
 # settings.py
 CSRF_COOKIE_SECURE = False  # Should be True in production with HTTPS
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000',
-                        'http://localhost:5173',
-                        'http://localhost:3000/',
-                         "http://localhost:8080",
-                        "http://127.0.0.1:8080",
-
-                        
-                        ]
-
-
-CSRF_TRUSTED_ORIGINS = [
-      # Include your frontend's URL here
-]
-
-
 
 # Django settings.py example
-CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = True
 
 # Application definition
 INSTALLED_APPS = [
     'daphne',
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -63,21 +61,17 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'rest_framework_simplejwt',
-    'corsheaders',
-    'debug_toolbar',
-    
+
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -106,13 +100,30 @@ ASGI_APPLICATION = 'Backend.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', 'doctor'),  # Use environment variable
+        'NAME': os.environ.get('POSTGRES_DB', 'doctor'), 
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', '8086'),
-        'HOST': os.environ.get('DB_HOST', 'db'),  # Set to the service name in docker-compose
-        'PORT': os.environ.get('DB_PORT', '5432'),  # Default PostgreSQL port
+        # 'HOST': os.environ.get('DB_HOST', 'db'), 
+        'HOST': os.environ.get('DB_HOST', 'localhost'), 
+        'PORT': os.environ.get('DB_PORT', '5432'),  
     }
 }
+
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "find_doctor",
+        "TIMEOUT": 300,
+    }
+}
+
+
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -156,6 +167,8 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -164,13 +177,18 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
 }
 
+
+CORS_ALLOW_CREDENTIALS = True  # Allow credentials (if using authentication)
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173", 
-    "http://localhost:3000",  # No trailing slash
-    "http://localhost:8080",   # Removed duplicate
-    "http://127.0.0.1:8080",   # Optional, keep if needed
+    "https://finddoctor.space",
+    "https://www.finddoctor.space",
+    "https://www.finddoctor.tech",
+    "http://localhost:5173",
 ]
 
 CORS_ALLOW_METHODS = [
@@ -188,7 +206,10 @@ CORS_ALLOW_HEADERS = [
     'accept',
     'origin',
     'x-csrftoken',
+    "idempotency-key",
+
 ]
+
 
 CORS_ALLOW_CREDENTIALS=True
 # settings.py
@@ -247,21 +268,4 @@ AUTH_USER_MODEL = 'Users.MyUser'
 
 
 
-# RAZORPAY_KEY_ID='rzp_test_HJ4Pt1x015HzyE'
 
-# RAZORPAY_KEY_SECRET='LyRxETPRtoJSbbPYSlPYNcad'
-
-
-# CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels_redis.core.RedisChannelLayer",
-        
-#     },
-# }
-
-
-SOCKETIO_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    'http://localhost:3000/'
-]

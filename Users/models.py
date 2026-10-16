@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
 from django.core.validators import EmailValidator
@@ -65,12 +67,16 @@ class MyAccountManager(BaseUserManager):
 
 class MyUser(AbstractBaseUser):
 
+    class Meta:
+        db_table = 'Users_myuser'
+
+
     USER_TYPE_CHOICES =(
         ('admin','Admin'),
         ('patient','Patient'),
         ('doctor','Doctor')
     )
-    username = models.CharField(max_length=30, unique=True)
+    username = models.CharField(max_length=30)
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=15)
     date_joined = models.DateTimeField(verbose_name='date joined',auto_now=True)
@@ -101,7 +107,7 @@ class MyUser(AbstractBaseUser):
 
 class UserProfile(models.Model):
     user = models.ForeignKey(MyUser,on_delete=models.CASCADE,related_name='User_profile')
-    profile_pic = models.ImageField(upload_to='media/profile_pic', blank=True, null=True)
+    profile_pic = models.ImageField(upload_to='profile_pic', blank=True, null=True)
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -135,6 +141,60 @@ class Wallet(models.Model):
         message['timestamp'] = message['timestamp'].isoformat()  # Convert to string
         self.notifications.append(message)
         self.save()
+
+
+
+
+class WalletTopUp(models.Model):
+    class Status(models.TextChoices):
+        CREATED = "CREATED", "Created"
+        PENDING = "PENDING", "Pending"
+        SUCCESS = "SUCCESS", "Success"
+        FAILED = "FAILED", "Failed"
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.PROTECT,
+        related_name="topups",
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+    )
+
+    razorpay_order_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+
+    razorpay_payment_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.CREATED,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.wallet.user_id} - {self.amount} - {self.status}"
+
 
 
 

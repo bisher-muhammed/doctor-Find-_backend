@@ -8,6 +8,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 User = get_user_model()
 from Doctors.serializers import DoctorProfileSerializer, SlotCreateSerializer
 from django.core.files.uploadedfile import InMemoryUploadedFile
+import re
+import imghdr
 
 
 
@@ -30,31 +32,55 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 
+
+
+
+User = get_user_model()
+
 class UserRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'phone_number','password']
+        fields = ['id', 'username', 'email', 'phone_number', 'password']
         extra_kwargs = {
             'password': {'write_only': True}
         }
 
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        user_type = validated_data.get('user_type', 'patient')
-        instance = self.Meta.model(**validated_data)
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return value
 
-        if password is not None:
-            instance.set_password(password)
-            instance.save()
-            
-            return instance
-        else:
-            raise serializers.ValidationError({"password": "Password is required."})
+    def validate_username(self, value):
+        if not value.isalnum():
+            raise serializers.ValidationError("Username must be alphanumeric.")
+        return value
+
+    def validate_password(self, value):
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        if not re.search(r"[A-Z]", value):
+            raise serializers.ValidationError("Password must contain at least one uppercase letter.")
+        if not re.search(r"[a-z]", value):
+            raise serializers.ValidationError("Password must contain at least one lowercase letter.")
+        if not re.search(r"\d", value):
+            raise serializers.ValidationError("Password must contain at least one digit.")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
+            raise serializers.ValidationError("Password must contain at least one special character.")
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        instance = self.Meta.model(**validated_data)
+        instance.set_password(password)
+        instance.save()
+        return instance
+
+
 
 
 class OtpVerificationSerializer(serializers.Serializer):
     email=serializers.EmailField()
-    otp=serializers.CharField(max_length=6)
+    otp = serializers.RegexField(regex=r"^\d{4}$")
 
 
 
@@ -122,21 +148,27 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if not value.isalpha():
             raise serializers.ValidationError("First name should contain only alphabetic characters.")
         if len(value) < 2:
-            raise serializers.ValidationError("First name must be at least 2 characters long.")
+            raise serializers.ValidationError("First name must be at least 5 characters long.")
         return value
 
     def validate_last_name(self, value):
         """Ensure last name is alphabetic and not too short."""
         if not value.isalpha():
             raise serializers.ValidationError("Last name should contain only alphabetic characters.")
-        if len(value) < 2:
+        if len(value) < 1:
             raise serializers.ValidationError("Last name must be at least 2 characters long.")
         return value
 
     def validate_date_of_birth(self, value):
-        """Ensure date of birth is a valid past date."""
-        if value and value > date.today():
-            raise serializers.ValidationError("Date of birth cannot be in the future.")
+        """Ensure user is at least 18 years old."""
+        today = date.today()
+        eighteen_years_ago = today.replace(year=today.year - 18)
+
+        if value > eighteen_years_ago:
+            raise serializers.ValidationError("You must be at least 18 years old.")
+        if value >= today:
+            raise serializers.ValidationError("Date of birth cannot be today or in the future.")
+        
         return value
 
     def validate_gender(self, value):
@@ -175,7 +207,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def validate_address(self, value):
         """Ensure address is not empty and not too long."""
         if len(value) < 5:
-            raise serializers.ValidationError("Address must be at least 5 characters long.")
+            raise serializers.ValidationError("Address must be at least 4 characters long.")
         if len(value) > 255:
             raise serializers.ValidationError("Address cannot be longer than 255 characters.")
         return value
@@ -189,9 +221,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return data
     
     def validate_profile_pic(self, value):
-        # Only validate if the value is provided (not None)
-        if value and not isinstance(value, InMemoryUploadedFile):
-            raise serializers.ValidationError("The submitted data was not a file.")
+        if value:
+            allowed_types = ['jpeg', 'png', 'gif', 'webp']
+            file_type = imghdr.what(value)
+            if file_type not in allowed_types:
+                raise serializers.ValidationError("Only image files (jpeg, png, gif, webp) are allowed.")
+            max_size_mb = 5
+            if value.size > max_size_mb * 1024 * 1024:
+                raise serializers.ValidationError("Image size must be less than 5 MB.")
+            
+            valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+            if not any(str(value.name).lower().endswith(ext) for ext in valid_extensions):
+                raise serializers.ValidationError("Unsupported file extension.")
+
+            if not isinstance(value, InMemoryUploadedFile):
+                raise serializers.ValidationError("The submitted data was not a valid uploaded file.")
+        
         return value
 
 
@@ -210,12 +255,16 @@ class BookingSerializer(serializers.ModelSerializer):
     
 
     def get_transaction_type(self, obj):
-    # Check if a Razorpay transaction exists
-        if obj.transaction_set.exists():  # Use transaction_set to access related transactions
-            return 'Razorpay'
-        elif obj.wallettransaction_set.exists():  # Use wallettransaction_set for wallet transactions
-            return 'Wallet'
-        return 'Unknown'  # Return 'Unknown' if no transaction exists
+        if obj.payment_method == "wallet":
+            return "Wallet"
+        if obj.payment_method == "razorpay":
+            return "Razorpay"
+        if obj.transaction_set.all():
+            return "Razorpay"
+        if obj.wallettransaction_set.all():
+            return "Wallet"
+        return "Unknown"
+
 
 
 
@@ -223,7 +272,7 @@ class BookingSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 
 class TransactionSerializer(serializers.ModelSerializer):
-    amount = serializers.SerializerMethodField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, coerce_to_string=False, read_only=True)
     username = serializers.SerializerMethodField()
 
     class Meta:
@@ -235,8 +284,9 @@ class TransactionSerializer(serializers.ModelSerializer):
             'razorpay_order_id',
             'payment_id',
             'razorpay_signature',
+            "razorpay_refund_id",
             'status',
-            'amount',  # Include the amount from the related slot
+            'amount',  
             'created_at',
             'updated_at',
             'username'
@@ -267,8 +317,9 @@ class WalletSerializer(serializers.ModelSerializer):
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
-    amount = serializers.SerializerMethodField()
-    username = serializers.SerializerMethodField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, coerce_to_string=False, read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+    
 
     class Meta:
         model = WalletTransaction
